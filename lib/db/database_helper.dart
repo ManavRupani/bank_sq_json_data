@@ -91,4 +91,73 @@ class DatabaseHelper {
       whereArgs: [userId],
     );
   }
+
+  Future<void> transferMoneyByUsername(String senderUsername, String recipientUsername, double amount) async {
+  Database db = await this.db;
+
+  await db.transaction((txn) async {
+    // Get the sender's details
+    List<Map<String, dynamic>> senderResult = await txn.query(
+      'users',
+      where: 'username = ?',
+      whereArgs: [senderUsername],
+    );
+
+    if (senderResult.isEmpty) {
+      throw Exception('Sender does not exist.');
+    }
+
+    int senderId = senderResult.first['id'];
+    double senderBalance = senderResult.first['balance'];
+
+    if (senderBalance < amount) {
+      throw Exception('Insufficient balance.');
+    }
+
+    // Get the recipient's details
+    List<Map<String, dynamic>> recipientResult = await txn.query(
+      'users',
+      where: 'username = ?',
+      whereArgs: [recipientUsername],
+    );
+
+    if (recipientResult.isEmpty) {
+      throw Exception('Recipient does not exist.');
+    }
+
+    int recipientId = recipientResult.first['id'];
+    double recipientBalance = recipientResult.first['balance'];
+
+    // Update sender's balance
+    await txn.update(
+      'users',
+      {'balance': senderBalance - amount},
+      where: 'id = ?',
+      whereArgs: [senderId],
+    );
+
+    // Update recipient's balance
+    await txn.update(
+      'users',
+      {'balance': recipientBalance + amount},
+      where: 'id = ?',
+      whereArgs: [recipientId],
+    );
+
+    // Insert debit transaction for sender
+    await txn.insert('bank_transactions', {
+      'userId': senderId,
+      'type': 'Transfer Out',
+      'amount': amount,
+    });
+
+    // Insert credit transaction for recipient
+    await txn.insert('bank_transactions', {
+      'userId': recipientId,
+      'type': 'Transfer In',
+      'amount': amount,
+    });
+  });
+}
+
 }

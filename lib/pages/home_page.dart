@@ -65,10 +65,10 @@ class _HomePageState extends State<HomePage> {
                         BankTransaction transaction = snapshot.data![index];
                         return ListTile(
                           leading: Icon(
-                            transaction.type == 'Deposit'
+                            transaction.type == 'Deposit' || transaction.type == 'Transfer In'
                                 ? Icons.arrow_downward
                                 : Icons.arrow_upward,
-                            color: transaction.type == 'Deposit'
+                            color: transaction.type == 'Deposit' || transaction.type == 'Transfer In'
                                 ? Colors.green
                                 : Colors.red,
                           ),
@@ -92,6 +92,10 @@ class _HomePageState extends State<HomePage> {
                 ElevatedButton(
                   onPressed: () => _performTransaction('Withdraw'),
                   child: Text('Withdraw'),
+                ),
+                ElevatedButton(
+                  onPressed: _performTransfer,
+                  child: Text('Transfer'),
                 ),
               ],
             ),
@@ -156,4 +160,76 @@ class _HomePageState extends State<HomePage> {
       },
     );
   }
+
+  Future<void> _performTransfer() async {
+  TextEditingController _recipientUsernameController = TextEditingController();
+  TextEditingController _amountController = TextEditingController();
+
+  showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: Text('Transfer Money'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _recipientUsernameController,
+              decoration: InputDecoration(labelText: 'Enter recipient username'),
+            ),
+            TextField(
+              controller: _amountController,
+              keyboardType: TextInputType.number,
+              decoration: InputDecoration(labelText: 'Enter amount'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+            },
+            child: Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              String recipientUsername = _recipientUsernameController.text;
+              double amount = double.parse(_amountController.text);
+
+              if (amount > user.balance) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Insufficient balance')),
+                );
+              } else {
+                try {
+                  await DatabaseHelper.instance.transferMoneyByUsername(
+                      user.username, recipientUsername, amount);
+                  
+                  double newBalance = user.balance - amount;
+                  setState(() {
+                    user.balance = newBalance;
+                    transactionsFuture =
+                        DatabaseHelper.instance.getUserTransactions(user.id!);
+                  });
+
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Transfer successful')),
+                  );
+                } catch (e) {
+                  Navigator.of(context).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Transfer failed: $e')),
+                  );
+                }
+              }
+            },
+            child: Text('Submit'),
+          ),
+        ],
+      );
+    },
+  );
+}
+
 }
